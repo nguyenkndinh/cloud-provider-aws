@@ -79,7 +79,7 @@ func Test_NodesJoiningAndLeaving(t *testing.T) {
 			defer w.Stop()
 
 			tc.enqueueNode(testcase.currNode, true)
-			tc.MonitorNodes()
+			tc.Process()
 		})
 	}
 }
