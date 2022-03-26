@@ -139,7 +139,7 @@ func Test_NodesJoiningAndLeaving(t *testing.T) {
 				}
 				if strings.Contains(logBuf.String(), "error tagging ") || strings.Contains(logBuf.String(), "error untagging ") {
 					if !strings.Contains(logBuf.String(), ", requeuing") {
-						t.Errorf("\nFailed to tag or untag but msg was not requeueing: \n%v\n", logBuf.String())
+						t.Errorf("\nFailed to tag or untag but msg does not contain 'requeueing': \n%v\n", logBuf.String())
 					}
 				}
 			}
