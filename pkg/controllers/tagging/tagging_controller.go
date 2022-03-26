@@ -107,7 +107,7 @@ func (tc *TaggingController) Run(stopCh <-chan struct{}) {
 }
 
 // work is a long-running function that continuously
-// processes each message on the work queue
+// call process() for each message on the workqueue
 func (tc *TaggingController) work() {
 	for tc.Process() {
 	}
