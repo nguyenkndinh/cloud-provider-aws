@@ -26,14 +26,7 @@ import (
 	opt "k8s.io/cloud-provider-aws/pkg/controllers/options"
 	awsv1 "k8s.io/cloud-provider-aws/pkg/providers/v1"
 	"k8s.io/klog/v2"
-	"strings"
 	"time"
-)
-
-const (
-	// This is a prefix used to recognized if a node
-	// in the workqueue is to be tagged or not
-	tagKeyPrefix string = "ToBeTagged:"
 )
 
 // workItem contains the action that has to be perform against a node
@@ -50,7 +43,7 @@ type TaggingController struct {
 	kubeClient   clientset.Interface
 	cloud        *awsv1.Cloud
 	workqueue    workqueue.RateLimitingInterface
-
+	nodesSynced  cache.InformerSynced
 	// Value controlling TaggingController monitoring period, i.e. how often does TaggingController
 	// check node list. This value should be lower than nodeMonitorGracePeriod
 	// set in controller-manager
@@ -86,6 +79,7 @@ func NewTaggingController(
 		tags:              tags,
 		resources:         resources,
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Tagging"),
+		nodesSynced:       nodeInformer.Informer().HasSynced,
 	}
 
 	// Use shared informer to listen to add/update/delete of nodes. Note that any nodes
@@ -104,6 +98,13 @@ func NewTaggingController(
 func (tc *TaggingController) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 	defer tc.workqueue.ShutDown()
+
+	// Wait for the caches to be synced before starting workers
+	klog.Info("Waiting for informer caches to sync")
+	if ok := cache.WaitForCacheSync(stopCh, tc.nodesSynced); !ok {
+		klog.Errorf("failed to wait for caches to sync")
+		return
+	}
 
 	klog.Infof("Starting the tagging controller")
 	go wait.Until(tc.work, tc.nodeMonitorPeriod, stopCh)
@@ -244,16 +245,4 @@ func (tc *TaggingController) enqueueNode(obj interface{}, action func(node *v1.N
 	}
 	tc.workqueue.Add(item)
 	klog.Infof("Added %s to the workqueue", item)
-}
-
-// getActionAndKey from the provided key, check if the object is to be tagged
-// and extract that action together with the key
-func (tc *TaggingController) getActionAndKey(key string) (bool, string) {
-	toBeTagged := false
-	if strings.HasPrefix(key, tagKeyPrefix) {
-		toBeTagged = true
-		key = strings.TrimPrefix(key, tagKeyPrefix)
-	}
-
-	return toBeTagged, key
 }
