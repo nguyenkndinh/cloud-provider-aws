@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-// workItem contains the action that has to be perform against a node
+// workItem contains the node and an action for that node
 type workItem struct {
 	node   *v1.Node
 	action func(node *v1.Node) error
@@ -85,8 +85,8 @@ func NewTaggingController(
 	// Use shared informer to listen to add/update/delete of nodes. Note that any nodes
 	// that exist before tagging controller starts will show up in the update method
 	tc.nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { tc.enqueueNode(obj, tc.untagNodeResources) },
-		UpdateFunc: func(oldObj, newObj interface{}) { tc.enqueueNode(newObj, tc.untagNodeResources) },
+		AddFunc:    func(obj interface{}) { tc.enqueueNode(obj, tc.tagNodesResources) },
+		UpdateFunc: func(oldObj, newObj interface{}) { tc.enqueueNode(newObj, tc.tagNodesResources) },
 		DeleteFunc: func(obj interface{}) { tc.enqueueNode(obj, tc.untagNodeResources) },
 	})
 
