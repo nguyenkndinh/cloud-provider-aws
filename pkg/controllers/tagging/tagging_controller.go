@@ -235,8 +235,8 @@ func (tc *TaggingController) untagEc2Instance(node *v1.Node) error {
 	return nil
 }
 
-// enqueueNode takes in the object to enqueue to the workqueue and whether
-// the object is to be tagged
+// enqueueNode takes in the object and an
+// action for the object for a workitem and enqueue to the workqueue
 func (tc *TaggingController) enqueueNode(obj interface{}, action func(node *v1.Node) error) {
 	node := obj.(*v1.Node)
 	item := &workItem{
