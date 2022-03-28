@@ -16,7 +16,6 @@ package tagging
 import (
 	"fmt"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -36,6 +35,12 @@ const (
 	// in the workqueue is to be tagged or not
 	tagKeyPrefix string = "ToBeTagged:"
 )
+
+// workItem contains the action that has to be perform against a node
+type workItem struct {
+	node   *v1.Node
+	action func(node *v1.Node) error
+}
 
 // TaggingController is the controller implementation for tagging cluster resources.
 // It periodically check for Node events (creating/deleting) to apply appropriate
@@ -86,9 +91,9 @@ func NewTaggingController(
 	// Use shared informer to listen to add/update/delete of nodes. Note that any nodes
 	// that exist before tagging controller starts will show up in the update method
 	tc.nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    func(obj interface{}) { tc.enqueueNode(obj, true) },
-		UpdateFunc: func(oldObj, newObj interface{}) { tc.enqueueNode(newObj, true) },
-		DeleteFunc: func(obj interface{}) { tc.enqueueNode(obj, false) },
+		AddFunc:    func(obj interface{}) { tc.enqueueNode(obj, tc.tagNodesResources) },
+		UpdateFunc: func(oldObj, newObj interface{}) { tc.enqueueNode(newObj, tc.tagNodesResources) },
+		DeleteFunc: func(obj interface{}) { tc.enqueueNode(obj, tc.untagNodeResources) },
 	})
 
 	return tc, nil
@@ -126,50 +131,22 @@ func (tc *TaggingController) Process() bool {
 	err := func(obj interface{}) error {
 		defer tc.workqueue.Done(obj)
 
-		var key string
-		var ok bool
-		if key, ok = obj.(string); !ok {
+		workItem, ok := obj.(*workItem)
+		if !ok {
 			tc.workqueue.Forget(obj)
-			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			utilruntime.HandleError(fmt.Errorf("expected workItem in workqueue but got %#v", obj))
 			return nil
 		}
 
-		var toBeTagged bool
-		toBeTagged, key = tc.getActionAndKey(key)
-
-		_, nodeName, err := cache.SplitMetaNamespaceKey(key)
-
+		err := workItem.action(workItem.node)
 		if err != nil {
-			utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-			return nil
-		}
-
-		node, err := tc.nodeInformer.Lister().Get(nodeName)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				klog.Errorf("Unable to find a node with name %s", nodeName)
-				return nil
-			}
-
-			return err
-		}
-
-		if toBeTagged {
-			key = tagKeyPrefix + key
-			if err := tc.tagNodesResources(node); err != nil {
-				// Put the item back on the workqueue to handle any transient errors.
-				tc.workqueue.AddRateLimited(key)
-				return fmt.Errorf("error tagging '%s': %s, requeuing", key, err.Error())
-			}
-		} else {
-			if err := tc.untagNodeResources(node); err != nil {
-				tc.workqueue.AddRateLimited(key)
-				return fmt.Errorf("error untagging '%s': %s, requeuing", key, err.Error())
-			}
+			// Put the item back on the workqueue to handle any transient errors.
+			tc.workqueue.AddRateLimited(workItem)
+			return fmt.Errorf("error finishing work item '%v': %s, requeuing", workItem, err.Error())
 		}
 
 		tc.workqueue.Forget(obj)
-		klog.Infof("Finished processing %v", obj)
+		klog.Infof("Finished processing %v", workItem)
 		return nil
 	}(obj)
 
@@ -259,21 +236,14 @@ func (tc *TaggingController) untagEc2Instance(node *v1.Node) error {
 
 // enqueueNode takes in the object to enqueue to the workqueue and whether
 // the object is to be tagged
-func (tc *TaggingController) enqueueNode(obj interface{}, toBeTagged bool) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
+func (tc *TaggingController) enqueueNode(obj interface{}, action func(node *v1.Node) error) {
+	node := obj.(*v1.Node)
+	item := &workItem{
+		node:   node,
+		action: action,
 	}
-
-	if toBeTagged {
-		key = tagKeyPrefix + key
-	}
-
-	tc.workqueue.Add(key)
-
-	klog.Infof("Added %s to the workqueue", key)
+	tc.workqueue.Add(item)
+	klog.Infof("Added %s to the workqueue", item)
 }
 
 // getActionAndKey from the provided key, check if the object is to be tagged

@@ -14,7 +14,6 @@ limitations under the License.
 package options
 
 import (
-	"fmt"
 	"github.com/spf13/pflag"
 )
 
@@ -29,26 +28,34 @@ func (o *TaggingControllerOptions) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (o *TaggingControllerOptions) Validate() error {
-	if len(o.Tags) == 0 {
-		return fmt.Errorf("--tags must not be empty and must be a form of key=value")
+	//if len(o.Tags) == 0 {
+	//	return fmt.Errorf("--tags must not be empty and must be a form of key=value")
+	//}
+	//
+	//if len(o.Resources) == 0 {
+	//	return fmt.Errorf("--resources must not be empty")
+	//}
+	//
+	//for _, r := range o.Resources {
+	//	found := false
+	//
+	//	for _, resource := range SupportedResources {
+	//		if r == resource {
+	//			found = true
+	//		}
+	//	}
+	//
+	//	if !found {
+	//		return fmt.Errorf("%s is not a supported resource. Current supported resources %v", r, SupportedResources)
+	//	}
+	//}
+
+	o.Tags = map[string]string{
+		"key": "NGUYEN",
 	}
 
-	if len(o.Resources) == 0 {
-		return fmt.Errorf("--resources must not be empty")
-	}
-
-	for _, r := range o.Resources {
-		found := false
-
-		for _, resource := range SupportedResources {
-			if r == resource {
-				found = true
-			}
-		}
-
-		if !found {
-			return fmt.Errorf("%s is not a supported resource. Current supported resources %v", r, SupportedResources)
-		}
+	o.Resources = []string{
+		Instance,
 	}
 
 	return nil
