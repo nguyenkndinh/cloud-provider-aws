@@ -41,7 +41,7 @@ const (
 )
 
 // Controller is the controller implementation for tagging cluster resources.
-// It periodically checks for Node events (creating/deleting) to apply appropriate
+// It periodically checks for Node events (creating/deleting) to apply/delete appropriate
 // tags to resources.
 type Controller struct {
 	nodeInformer coreinformers.NodeInformer
@@ -152,9 +152,9 @@ func (tc *Controller) process() bool {
 				workItem.requeuingCount++
 				tc.workqueue.AddRateLimited(workItem)
 
-				return fmt.Errorf("error finishing work item '%v': %s, requeuing count %d", workItem, err.Error(), workItem.requeuingCount)
+				return fmt.Errorf("error processing work item '%v': %s, requeuing count %d", workItem, err.Error(), workItem.requeuingCount)
 			} else {
-				return fmt.Errorf("error finishing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
+				klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
 			}
 		}
 
