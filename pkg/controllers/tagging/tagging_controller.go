@@ -37,7 +37,7 @@ type workItem struct {
 }
 
 const (
-	MaxRequeuingCount = 10
+	maxRequeuingCount = 10
 )
 
 // Controller is the controller implementation for tagging cluster resources.
@@ -147,7 +147,7 @@ func (tc *Controller) process() bool {
 
 		err := workItem.action(workItem.node)
 		if err != nil {
-			if workItem.requeuingCount < MaxRequeuingCount {
+			if workItem.requeuingCount < maxRequeuingCount {
 				// Put the item back on the workqueue to handle any transient errors.
 				workItem.requeuingCount++
 				tc.workqueue.AddRateLimited(workItem)
