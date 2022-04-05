@@ -31,12 +31,17 @@ import (
 
 // workItem contains the node and an action for that node
 type workItem struct {
-	node   *v1.Node
-	action func(node *v1.Node) error
+	node           *v1.Node
+	action         func(node *v1.Node) error
+	requeuingCount int
 }
 
+const (
+	MaxRequeuingCount = 10
+)
+
 // Controller is the controller implementation for tagging cluster resources.
-// It periodically check for Node events (creating/deleting) to apply appropriate
+// It periodically checks for Node events (creating/deleting) to apply/delete appropriate
 // tags to resources.
 type Controller struct {
 	nodeInformer coreinformers.NodeInformer
@@ -44,6 +49,7 @@ type Controller struct {
 	cloud        *awsv1.Cloud
 	workqueue    workqueue.RateLimitingInterface
 	nodesSynced  cache.InformerSynced
+
 	// Value controlling Controller monitoring period, i.e. how often does Controller
 	// check node list. This value should be lower than nodeMonitorGracePeriod
 	// set in controller-manager
@@ -75,11 +81,11 @@ func NewTaggingController(
 		nodeInformer:      nodeInformer,
 		kubeClient:        kubeClient,
 		cloud:             awsCloud,
-		nodeMonitorPeriod: nodeMonitorPeriod,
 		tags:              tags,
 		resources:         resources,
 		workqueue:         workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Tagging"),
 		nodesSynced:       nodeInformer.Informer().HasSynced,
+		nodeMonitorPeriod: nodeMonitorPeriod,
 	}
 
 	// Use shared informer to listen to add/update/delete of nodes. Note that any nodes
@@ -141,9 +147,15 @@ func (tc *Controller) process() bool {
 
 		err := workItem.action(workItem.node)
 		if err != nil {
-			// Put the item back on the workqueue to handle any transient errors.
-			tc.workqueue.AddRateLimited(workItem)
-			return fmt.Errorf("error finishing work item '%v': %s, requeuing", workItem, err.Error())
+			if workItem.requeuingCount < MaxRequeuingCount {
+				// Put the item back on the workqueue to handle any transient errors.
+				workItem.requeuingCount++
+				tc.workqueue.AddRateLimited(workItem)
+
+				return fmt.Errorf("error processing work item '%v': %s, requeuing count %d", workItem, err.Error(), workItem.requeuingCount)
+			} else {
+				klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
+			}
 		}
 
 		tc.workqueue.Forget(obj)
@@ -240,8 +252,9 @@ func (tc *Controller) untagEc2Instance(node *v1.Node) error {
 func (tc *Controller) enqueueNode(obj interface{}, action func(node *v1.Node) error) {
 	node := obj.(*v1.Node)
 	item := &workItem{
-		node:   node,
-		action: action,
+		node:           node,
+		action:         action,
+		requeuingCount: 0,
 	}
 	tc.workqueue.Add(item)
 	klog.Infof("Added %s to the workqueue", item)
