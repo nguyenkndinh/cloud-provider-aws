@@ -71,6 +71,7 @@ func NewTaggingController(
 		return nil, err
 	}
 
+	registerMetrics()
 	tc := &Controller{
 		nodeInformer:      nodeInformer,
 		kubeClient:        kubeClient,
