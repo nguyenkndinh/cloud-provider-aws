@@ -153,9 +153,9 @@ func (tc *Controller) process() bool {
 				tc.workqueue.AddRateLimited(workItem)
 
 				return fmt.Errorf("error processing work item '%v': %s, requeuing count %d", workItem, err.Error(), workItem.requeuingCount)
-			} else {
-				klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
 			}
+
+			klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
 		}
 
 		tc.workqueue.Forget(obj)
