@@ -34,6 +34,7 @@ type workItem struct {
 	node           *v1.Node
 	action         func(node *v1.Node) error
 	requeuingCount int
+	enqueueTime    time.Time
 }
 
 const (
@@ -77,6 +78,7 @@ func NewTaggingController(
 		return nil, err
 	}
 
+	registerMetrics()
 	tc := &Controller{
 		nodeInformer:      nodeInformer,
 		kubeClient:        kubeClient,
@@ -141,9 +143,14 @@ func (tc *Controller) process() bool {
 		workItem, ok := obj.(*workItem)
 		if !ok {
 			tc.workqueue.Forget(obj)
-			utilruntime.HandleError(fmt.Errorf("expected workItem in workqueue but got %#v", obj))
+			err := fmt.Errorf("expected workItem in workqueue but got %#v", obj)
+			utilruntime.HandleError(err)
+			recordWorkitemMetrics("unable to parse obj", 0, err)
 			return nil
 		}
+
+		timeTaken := time.Since(workItem.enqueueTime).Seconds()
+		recordWorkitemMetrics(fmt.Sprintf("dequeued workitem for %s", workItem.node.GetName()), timeTaken, nil)
 
 		err := workItem.action(workItem.node)
 		if err != nil {
@@ -160,6 +167,10 @@ func (tc *Controller) process() bool {
 
 		tc.workqueue.Forget(obj)
 		klog.Infof("Finished processing %v", workItem)
+
+		timeTaken = time.Since(workItem.enqueueTime).Seconds()
+		recordWorkitemMetrics(fmt.Sprintf("Finished processing %s", workItem.node.GetName()), timeTaken, err)
+
 		return nil
 	}(obj)
 
@@ -255,6 +266,7 @@ func (tc *Controller) enqueueNode(obj interface{}, action func(node *v1.Node) er
 		node:           node,
 		action:         action,
 		requeuingCount: 0,
+		enqueueTime:    time.Now(),
 	}
 	tc.workqueue.Add(item)
 	klog.Infof("Added %s to the workqueue", item)
