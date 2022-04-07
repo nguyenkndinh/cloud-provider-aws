@@ -38,7 +38,7 @@ type workItem struct {
 }
 
 const (
-	maxRequeuingCount = 10
+	maxRequeuingCount = 9
 )
 
 // Controller is the controller implementation for tagging cluster resources.
