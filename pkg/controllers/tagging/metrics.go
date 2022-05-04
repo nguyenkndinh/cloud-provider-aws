@@ -47,10 +47,10 @@ func registerMetrics() {
 	})
 }
 
-func recordWorkitemMetrics(actionName string, timeTaken float64, err error) {
-	if err != nil {
-		workItemError.With(metrics.Labels{"workqueue": actionName}).Inc()
-	}
-
+func recordWorkItemLatencyMetrics(actionName string, timeTaken float64) {
 	workItemLatency.With(metrics.Labels{"workqueue": actionName}).Observe(timeTaken)
+}
+
+func recordWorkItemErrorMetrics(actionName string) {
+	workItemError.With(metrics.Labels{"workqueue": actionName}).Inc()
 }
