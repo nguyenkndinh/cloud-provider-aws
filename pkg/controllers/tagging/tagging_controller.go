@@ -145,12 +145,12 @@ func (tc *Controller) process() bool {
 			tc.workqueue.Forget(obj)
 			err := fmt.Errorf("expected workItem in workqueue but got %#v", obj)
 			utilruntime.HandleError(err)
-			recordWorkItemErrorMetrics("unable to parse obj")
+			recordWorkItemErrorMetrics("dequeue_work_item")
 			return nil
 		}
 
 		timeTaken := time.Since(workItem.enqueueTime).Seconds()
-		recordWorkItemLatencyMetrics(fmt.Sprintf("dequeued workitem for %s", workItem.node.GetName()), timeTaken)
+		recordWorkItemLatencyMetrics("dequeue_work_item", timeTaken)
 
 		err := workItem.action(workItem.node)
 		if err != nil {
@@ -163,11 +163,11 @@ func (tc *Controller) process() bool {
 			}
 
 			klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
-			recordWorkItemErrorMetrics(fmt.Sprintf("failed to process %s", workItem.node.GetName()))
+			recordWorkItemErrorMetrics("process_work_item")
 		} else {
 			klog.Infof("Finished processing %v", workItem)
 			timeTaken = time.Since(workItem.enqueueTime).Seconds()
-			recordWorkItemLatencyMetrics(fmt.Sprintf("finished processing %s", workItem.node.GetName()), timeTaken)
+			recordWorkItemLatencyMetrics("process_work_item", timeTaken)
 		}
 
 		tc.workqueue.Forget(obj)
