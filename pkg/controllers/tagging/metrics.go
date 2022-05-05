@@ -22,9 +22,9 @@ import (
 var register sync.Once
 
 var (
-	workItemLatency = metrics.NewHistogramVec(
+	workItemDuration = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
-			Name:           "cloudprovider_tagging_controller_work_item_latency",
+			Name:           "cloudprovider_tagging_controller_work_item_duration_seconds",
 			Help:           "workitem latency of workitem being in the queue and time it takes to process",
 			StabilityLevel: metrics.ALPHA,
 		},
@@ -42,13 +42,13 @@ var (
 // registerMetrics registers tagging-controller metrics.
 func registerMetrics() {
 	register.Do(func() {
-		legacyregistry.MustRegister(workItemLatency)
+		legacyregistry.MustRegister(workItemDuration)
 		legacyregistry.MustRegister(workItemError)
 	})
 }
 
 func recordWorkItemLatencyMetrics(latencyType string, timeTaken float64) {
-	workItemLatency.With(metrics.Labels{"latency_type": latencyType}).Observe(timeTaken)
+	workItemDuration.With(metrics.Labels{"latency_type": latencyType}).Observe(timeTaken)
 }
 
 func recordWorkItemErrorMetrics(errorType string, instanceID string) {
