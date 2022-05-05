@@ -38,7 +38,11 @@ type workItem struct {
 }
 
 const (
-	maxRequeuingCount = 9
+	maxRequeuingCount           = 9
+	totalErrors                 = "total_errors"
+	workItemProcessingTime      = "work_item_processing_time"
+	workItemDequeuingTime       = "work_item_dequeuing_time"
+	errorsAfterRetriesExhausted = "errors_after_retries_exhausted"
 )
 
 // Controller is the controller implementation for tagging cluster resources.
@@ -145,29 +149,37 @@ func (tc *Controller) process() bool {
 			tc.workqueue.Forget(obj)
 			err := fmt.Errorf("expected workItem in workqueue but got %#v", obj)
 			utilruntime.HandleError(err)
-			recordWorkItemErrorMetrics("dequeue_work_item")
 			return nil
 		}
 
 		timeTaken := time.Since(workItem.enqueueTime).Seconds()
-		recordWorkItemLatencyMetrics("dequeue_work_item", timeTaken)
+		recordWorkItemLatencyMetrics(workItemDequeuingTime, timeTaken)
 
-		err := workItem.action(workItem.node)
+		instanceID, err := awsv1.KubernetesInstanceID(workItem.node.Spec.ProviderID).MapToAWSInstanceID()
+		if err != nil {
+			err = fmt.Errorf("Error in getting instanceID for node %s, error: %v", workItem.node.GetName(), err)
+			utilruntime.HandleError(err)
+			return nil
+		}
+
+		err = workItem.action(workItem.node)
+
 		if err != nil {
 			if workItem.requeuingCount < maxRequeuingCount {
 				// Put the item back on the workqueue to handle any transient errors.
 				workItem.requeuingCount++
 				tc.workqueue.AddRateLimited(workItem)
 
+				recordWorkItemErrorMetrics(totalErrors, string(instanceID))
 				return fmt.Errorf("error processing work item '%v': %s, requeuing count %d", workItem, err.Error(), workItem.requeuingCount)
 			}
 
 			klog.Errorf("error processing work item '%v': %s, requeuing count exceeded", workItem, err.Error())
-			recordWorkItemErrorMetrics("process_work_item")
+			recordWorkItemErrorMetrics(errorsAfterRetriesExhausted, string(instanceID))
 		} else {
 			klog.Infof("Finished processing %v", workItem)
 			timeTaken = time.Since(workItem.enqueueTime).Seconds()
-			recordWorkItemLatencyMetrics("process_work_item", timeTaken)
+			recordWorkItemLatencyMetrics(workItemProcessingTime, timeTaken)
 		}
 
 		tc.workqueue.Forget(obj)
@@ -182,7 +194,7 @@ func (tc *Controller) process() bool {
 	return true
 }
 
-// tagNodesResources tag node resources from a list of nodes
+// tagNodesResources tag node resources
 // If we want to tag more resources, modify this function appropriately
 func (tc *Controller) tagNodesResources(node *v1.Node) error {
 	for _, resource := range tc.resources {
@@ -201,14 +213,9 @@ func (tc *Controller) tagNodesResources(node *v1.Node) error {
 // tagEc2Instances applies the provided tags to each EC2 instance in
 // the cluster.
 func (tc *Controller) tagEc2Instance(node *v1.Node) error {
-	instanceID, err := awsv1.KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
+	instanceID, _ := awsv1.KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
 
-	if err != nil {
-		klog.Errorf("Error in getting instanceID for node %s, error: %v", node.GetName(), err)
-		return err
-	}
-
-	err = tc.cloud.TagResource(string(instanceID), tc.tags)
+	err := tc.cloud.TagResource(string(instanceID), tc.tags)
 
 	if err != nil {
 		klog.Errorf("Error in tagging EC2 instance for node %s, error: %v", node.GetName(), err)
@@ -220,7 +227,7 @@ func (tc *Controller) tagEc2Instance(node *v1.Node) error {
 	return nil
 }
 
-// untagNodeResources untag node resources from a list of nodes
+// untagNodeResources untag node resources
 // If we want to untag more resources, modify this function appropriately
 func (tc *Controller) untagNodeResources(node *v1.Node) error {
 	for _, resource := range tc.resources {
@@ -239,14 +246,9 @@ func (tc *Controller) untagNodeResources(node *v1.Node) error {
 // untagEc2Instances deletes the provided tags to each EC2 instances in
 // the cluster.
 func (tc *Controller) untagEc2Instance(node *v1.Node) error {
-	instanceID, err := awsv1.KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
+	instanceID, _ := awsv1.KubernetesInstanceID(node.Spec.ProviderID).MapToAWSInstanceID()
 
-	if err != nil {
-		klog.Errorf("Error in getting instanceID for node %s, error: %v", node.GetName(), err)
-		return err
-	}
-
-	err = tc.cloud.UntagResource(string(instanceID), tc.tags)
+	err := tc.cloud.UntagResource(string(instanceID), tc.tags)
 
 	if err != nil {
 		klog.Errorf("Error in untagging EC2 instance for node %s, error: %v", node.GetName(), err)

@@ -24,16 +24,16 @@ var register sync.Once
 var (
 	workItemLatency = metrics.NewHistogramVec(
 		&metrics.HistogramOpts{
-			Name:           "tagging_workitem_latency",
-			Help:           "workitem latency",
+			Name:           "cloudprovider_tagging_controller_work_item_latency",
+			Help:           "workitem latency of workitem being in the queue and time it takes to process",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"workqueue"})
 
 	workItemError = metrics.NewCounterVec(
 		&metrics.CounterOpts{
-			Name:           "tagging_workitem_error",
-			Help:           "workitem error",
+			Name:           "cloudprovider_tagging_controller_work_item_error",
+			Help:           "any error in dequeueing the work queue and processing workItem",
 			StabilityLevel: metrics.ALPHA,
 		},
 		[]string{"workqueue"})
@@ -47,10 +47,10 @@ func registerMetrics() {
 	})
 }
 
-func recordWorkItemLatencyMetrics(actionName string, timeTaken float64) {
-	workItemLatency.With(metrics.Labels{"workqueue": actionName}).Observe(timeTaken)
+func recordWorkItemLatencyMetrics(latencyType string, timeTaken float64) {
+	workItemLatency.With(metrics.Labels{"latency_type": latencyType}).Observe(timeTaken)
 }
 
-func recordWorkItemErrorMetrics(actionName string) {
-	workItemError.With(metrics.Labels{"workqueue": actionName}).Inc()
+func recordWorkItemErrorMetrics(errorType string, instanceID string) {
+	workItemError.With(metrics.Labels{"error_type": errorType, "instance_id": instanceID}).Inc()
 }
