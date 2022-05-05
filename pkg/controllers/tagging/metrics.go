@@ -28,7 +28,7 @@ var (
 			Help:           "workitem latency of workitem being in the queue and time it takes to process",
 			StabilityLevel: metrics.ALPHA,
 		},
-		[]string{"workqueue"})
+		[]string{"latency_type"})
 
 	workItemError = metrics.NewCounterVec(
 		&metrics.CounterOpts{
@@ -36,7 +36,7 @@ var (
 			Help:           "any error in dequeueing the work queue and processing workItem",
 			StabilityLevel: metrics.ALPHA,
 		},
-		[]string{"workqueue"})
+		[]string{"error_type", "instance_id"})
 )
 
 // registerMetrics registers tagging-controller metrics.
